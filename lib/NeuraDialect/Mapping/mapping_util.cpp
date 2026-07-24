@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <deque>
 #include <queue>
 
@@ -14,6 +15,14 @@
 
 using namespace mlir;
 using namespace mlir::neura;
+
+llvm::raw_ostream &mlir::neura::mapDbg() {
+  static const bool verbose = [] {
+    const char *e = std::getenv("NEURA_MAP_VERBOSE");
+    return e && e[0] == '1';
+  }();
+  return verbose ? llvm::outs() : llvm::nulls();
+}
 
 // Constants for award calculation.
 constexpr int kAwardProximityScale = 1;
@@ -49,6 +58,14 @@ OperationKind getOperationKindFromMlirOp(Operation *op) {
     return FMul;
   if (isa<neura::FDivOp>(op))
     return FDiv;
+  if (isa<neura::FExpOp>(op))
+    return IFExp;
+  if (isa<neura::FSqrtOp>(op))
+    return IFSqrt;
+  if (isa<neura::FSinOp>(op))
+    return IFSin;
+  if (isa<neura::FCosOp>(op))
+    return IFCos;
 
   // Memory operations
   if (isa<neura::LoadOp>(op))
@@ -57,10 +74,32 @@ OperationKind getOperationKindFromMlirOp(Operation *op) {
     return IStore;
   if (isa<neura::LoadIndexedOp>(op))
     return ILoadIndexed;
+  if (isa<neura::VectorLoadOp>(op))
+    return IVectorLoad;
   if (isa<neura::StoreIndexedOp>(op))
     return IStoreIndexed;
   if (isa<neura::AllocaOp>(op))
     return IAlloca;
+
+  // Gather/scatter memory primitives (M-CGRA GA unit).
+  if (isa<neura::GatherOp>(op))
+    return IGather;
+  if (isa<neura::ScatterOp>(op))
+    return IScatter;
+
+  // FVCU primitives (C-CGRA Fused Vector-Compare Unit).
+  if (isa<neura::FVCDot3Op>(op))
+    return IFvcDot3;
+  if (isa<neura::FVCPartialDot6Op>(op))
+    return IFvcPartialDot6;
+  if (isa<neura::FVCReduce6Op>(op))
+    return IFvcReduce6;
+  if (isa<neura::FVCMax3Op>(op))
+    return IFvcMax3;
+  if (isa<neura::FVCMin3Op>(op))
+    return IFvcMin3;
+  if (isa<neura::FVCCmpSwapOp>(op))
+    return IFvcCmpSwap;
 
   // Logical operations
   if (isa<neura::OrOp>(op))
@@ -83,6 +122,18 @@ OperationKind getOperationKindFromMlirOp(Operation *op) {
     return IZExt;
   if (isa<neura::ShlOp>(op))
     return IShl;
+  if (isa<neura::LShrOp>(op))
+    return ILShr;
+  if (isa<neura::XorOp>(op))
+    return IXor;
+
+  // Additional scalar primitives needed by real rendering kernels.
+  if (isa<neura::FloorOp>(op))
+    return IFloor;
+  if (isa<neura::FMinOp>(op))
+    return IFMin;
+  if (isa<neura::FMaxOp>(op))
+    return IFMax;
 
   // Vector operations
   if (isa<neura::VFMulOp>(op))
@@ -671,7 +722,7 @@ bool mlir::neura::tryRouteDataMove(Operation *mov_op, MappingLoc src_loc,
     exclusive_deadline_step += state.getII();
   }
 
-  llvm::outs() << "[tryRouteDataMove] Routing from Tile#" << src_tile->getId()
+  mlir::neura::mapDbg() << "[tryRouteDataMove] Routing from Tile#" << src_tile->getId()
                << " @t=" << src_loc.time_step << " to Tile#"
                << dst_tile->getId() << " @t=" << exclusive_deadline_step
                << "\n";
@@ -684,7 +735,7 @@ bool mlir::neura::tryRouteDataMove(Operation *mov_op, MappingLoc src_loc,
         state, src_tile, src_loc.time_step, exclusive_deadline_step,
         dyn_cast_or_null<neura::DataMovOp>(mov_op));
     if (!available_reg) {
-      llvm::outs()
+      mlir::neura::mapDbg()
           << "[tryRouteDataMove] Cannot find available register on Tile#"
           << src_tile->getId() << " for time range: t=" << src_loc.time_step
           << " to t=" << exclusive_deadline_step << "\n";
@@ -696,7 +747,7 @@ bool mlir::neura::tryRouteDataMove(Operation *mov_op, MappingLoc src_loc,
       path_out.push_back({available_reg, t});
     }
 
-    llvm::outs() << "[tryRouteDataMove] Successfully routed on same tile using "
+    mlir::neura::mapDbg() << "[tryRouteDataMove] Successfully routed on same tile using "
                     "Register #"
                  << available_reg->getId() << "\n";
     return true;
@@ -740,7 +791,7 @@ bool mlir::neura::tryRouteDataMove(Operation *mov_op, MappingLoc src_loc,
                                    exclusive_deadline_step,
                                    dyn_cast_or_null<neura::DataMovOp>(mov_op));
           if (!wait_reg) {
-            llvm::outs() << "[tryRouteDataMove] Cannot find available waiting"
+            mlir::neura::mapDbg() << "[tryRouteDataMove] Cannot find available waiting"
                             "register on destination Tile#"
                          << dst_tile->getId() << "\n";
             continue; // Tries other paths.
@@ -809,7 +860,7 @@ bool mlir::neura::tryRouteDataMove(Operation *mov_op, MappingLoc src_loc,
   }
 
   // Search failed.
-  llvm::outs() << "[tryRouteDataMove] Cannot find routing path from Tile#"
+  mlir::neura::mapDbg() << "[tryRouteDataMove] Cannot find routing path from Tile#"
                << src_tile->getId() << " @t=" << src_loc.time_step
                << " to Tile#" << dst_tile->getId()
                << " @t=" << exclusive_deadline_step << "\n";

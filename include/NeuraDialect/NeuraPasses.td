@@ -14,6 +14,55 @@ def AssignAccelerator : Pass<"assign-accelerator", "ModuleOp"> {
   let constructor = "neura::createAssignAcceleratorPass()";
 }
 
+def RaichuClassifyTarget : Pass<"raichu-classify-target", "ModuleOp"> {
+  let summary =
+      "Classifies rendering kernels onto the RAICHU M-CGRA or C-CGRA by name.";
+  let description = [{
+    Name-based classifier for the RAICHU dual-tier fabric. Ray marching and
+    hash-grid encoding kernels are tagged for the Memory CGRA (m-cgra); MLP
+    kernels are tagged for the Compute CGRA (c-cgra). The decision is recorded
+    in the "raichu.target" attribute and is orthogonal to the "accelerator"
+    attribute used by the shared mapping pipeline.
+  }];
+  let constructor = "neura::createRaichuClassifyTargetPass()";
+}
+
+def RaichuFuseFvcu : Pass<"raichu-fuse-fvcu", "ModuleOp"> {
+  let summary =
+      "Fuses scalar arithmetic motifs into RAICHU C-CGRA FVCU primitives.";
+  let description = [{
+    C-CGRA operation fusion (RAICHU Section 4.2.2). Collapses short scalar
+    multiply-add dot-product chains into dense FVCU primitives (e.g.
+    neura.fvc_dot3) so the mapper sees one dense op instead of a scalar tree.
+  }];
+  let constructor = "neura::createRaichuFuseFvcuPass()";
+}
+
+def RaichuModelGaLatency : Pass<"raichu-model-ga-latency", "ModuleOp"> {
+  let summary =
+      "Sets gather/scatter execution latency from the M-CGRA GA unit width.";
+  let description = [{
+    Models the RAICHU M-CGRA Gather/Scatter unit (Section 4.1). A batched
+    gather/scatter of B rows occupies the GA unit for ceil(B / ga_width)
+    cycles; this latency is written to the op's "latency" attribute for the
+    mapper to reserve the GA tile accordingly.
+  }];
+  let constructor = "neura::createRaichuModelGaLatencyPass()";
+}
+
+def RaichuModelFvcuLatency : Pass<"raichu-model-fvcu-latency", "ModuleOp"> {
+  let summary =
+      "Sets FVCU primitive execution latency from the FVCU lane width.";
+  let description = [{
+    Models the RAICHU C-CGRA Fused Vector-Compare Unit (Section 4.4). A vector
+    dot / partial-dot of width K occupies the FVCU for ceil(K / fvcu_width)
+    cycles; this latency is written to the op's "latency" attribute for the
+    mapper to reserve the PE accordingly. Compute-side counterpart of
+    raichu-model-ga-latency.
+  }];
+  let constructor = "neura::createRaichuModelFvcuLatencyPass()";
+}
+
 def FusePattern : Pass<"fuse-pattern", "ModuleOp"> {
   let summary = "Fuses patterns in the Neura dialect";
   let description = [{Apply Neura fusion patterns.}];

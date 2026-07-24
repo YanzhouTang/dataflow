@@ -3,9 +3,17 @@
 #include "NeuraDialect/Architecture/Architecture.h"
 #include "NeuraDialect/Mapping/MappingState.h"
 #include "mlir/IR/Operation.h"
+#include "llvm/Support/raw_ostream.h"
 
 namespace mlir {
 namespace neura {
+// Verbosity-gated debug stream for the mapper hot path. Returns llvm::outs()
+// only when the environment variable NEURA_MAP_VERBOSE=1 is set; otherwise
+// returns a null stream that discards output. This keeps the default mapping
+// path free of the millions of per-candidate/per-route prints that otherwise
+// dominate runtime on large kernels.
+llvm::raw_ostream &mapDbg();
+
 // Returns the kind of operation from the MLIR operation.
 OperationKind getOperationKindFromMlirOp(Operation *op);
 

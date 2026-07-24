@@ -1,0 +1,58 @@
+architecture:
+  name: "RaichuComputeCgra"
+  version: "1.0"
+
+# RAICHU C-CGRA (Compute CGRA), Section 4.1 / Figure 5b/5c.
+#   - The fabric is a 4x4 grid of tiles; each tile is itself a 4x4 PE array.
+#   - The compiler maps one fused kernel block onto a single tile's 4x4 PE
+#     array and replicates it across all tiles (Section 4.2.2). We therefore
+#     model the mapping target as a single 4x4 PE mesh, which is exactly the
+#     per-tile compute substrate whose II governs C-CGRA throughput.
+#   - Every PE carries a Fused Vector-Compare Unit (FVCU) plus scalar/vector
+#     ALUs, matching the PE specialization in Figure 7.
+multi_cgra_defaults:
+  base_topology: "mesh"
+  rows: 1
+  columns: 1
+  memory:
+    capacity: 4096
+
+per_cgra_defaults:
+  rows: 4
+  columns: 4
+  ctrl_mem_items: 32
+  base_topology: "mesh"
+  memory:
+    banks: 16
+
+tile_defaults:
+  num_registers: 64
+  # Each PE has an FVCU plus scalar and vector functional units.
+  fu_types: ["fvcu", "fadd", "fmul", "fdiv", "add", "mul", "div", "shift",
+             "logic", "cmp", "sel", "type_conv", "vfmul", "fadd_fadd",
+             "fmul_fadd", "constant", "mem", "mem_indexed", "phi", "grant",
+             "loop_control", "return", "alloca"]
+
+link_defaults:
+  latency: 1
+  bandwidth: 32
+
+link_overrides:
+
+tile_overrides:
+
+extensions:
+  crossbar: false
+
+simulator:
+  execution_model: "serial"
+  logging:
+    enabled: false
+    file: "output.log"
+  driver:
+    name: "Driver"
+    frequency: "1GHz"
+  device:
+    name: "Device"
+    frequency: "1GHz"
+    bind_to_architecture: true

@@ -243,6 +243,63 @@ struct LlvmFPToSIToNeuraCast : public OpRewritePattern<mlir::LLVM::FPToSIOp> {
   }
 };
 
+struct LlvmSIToFPToNeuraCast : public OpRewritePattern<mlir::LLVM::SIToFPOp> {
+  using OpRewritePattern::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(mlir::LLVM::SIToFPOp op,
+                                PatternRewriter &rewriter) const override {
+    Value input = op.getArg();
+    Type result_type = op.getType();
+
+    // Creates a cast operation with "sitofp" as the cast type.
+    rewriter.replaceOpWithNewOp<neura::CastOp>(
+        op, result_type, input, rewriter.getStringAttr("sitofp"));
+    return success();
+  }
+};
+
+// llvm.intr.sqrt / llvm.intr.exp intrinsic forms (clang emits these for sqrt/exp
+// of computed values) -> neura.fsqrt / neura.fexp.
+struct LlvmIntrSqrtToNeura : public OpRewritePattern<mlir::LLVM::SqrtOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(mlir::LLVM::SqrtOp op,
+                                PatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<neura::FSqrtOp>(op, op.getType(),
+                                                op.getOperand());
+    return success();
+  }
+};
+
+struct LlvmIntrExpToNeura : public OpRewritePattern<mlir::LLVM::ExpOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(mlir::LLVM::ExpOp op,
+                                PatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<neura::FExpOp>(op, op.getType(),
+                                               op.getOperand());
+    return success();
+  }
+};
+
+struct LlvmIntrSinToNeura : public OpRewritePattern<mlir::LLVM::SinOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(mlir::LLVM::SinOp op,
+                                PatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<neura::FSinOp>(op, op.getType(),
+                                               op.getOperand());
+    return success();
+  }
+};
+
+struct LlvmIntrCosToNeura : public OpRewritePattern<mlir::LLVM::CosOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(mlir::LLVM::CosOp op,
+                                PatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<neura::FCosOp>(op, op.getType(),
+                                               op.getOperand());
+    return success();
+  }
+};
+
 struct LlvmSelectToNeuraSel : public OpRewritePattern<LLVM::SelectOp> {
   using OpRewritePattern::OpRewritePattern;
 
@@ -843,6 +900,40 @@ struct LlvmFuncToNeuraFunc : public OpRewritePattern<LLVM::LLVMFuncOp> {
   }
 };
 
+// Lowers libm transcendental calls (expf/exp, sqrtf/sqrt) to the corresponding
+// single-operand neura ops so the real 3DGS/NeRF math maps onto the CGRA.
+struct LlvmMathCallToNeura : public OpRewritePattern<LLVM::CallOp> {
+  using OpRewritePattern::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(LLVM::CallOp op,
+                                PatternRewriter &rewriter) const override {
+    auto callee = op.getCallee();
+    if (!callee || op.getArgOperands().size() != 1 || op.getNumResults() != 1) {
+      return failure();
+    }
+    StringRef name = callee.value();
+    Value operand = op.getArgOperands()[0];
+    Type result_type = op.getResult().getType();
+    if (name == "expf" || name == "exp") {
+      rewriter.replaceOpWithNewOp<neura::FExpOp>(op, result_type, operand);
+      return success();
+    }
+    if (name == "sqrtf" || name == "sqrt") {
+      rewriter.replaceOpWithNewOp<neura::FSqrtOp>(op, result_type, operand);
+      return success();
+    }
+    if (name == "sinf" || name == "sin") {
+      rewriter.replaceOpWithNewOp<neura::FSinOp>(op, result_type, operand);
+      return success();
+    }
+    if (name == "cosf" || name == "cos") {
+      rewriter.replaceOpWithNewOp<neura::FCosOp>(op, result_type, operand);
+      return success();
+    }
+    return failure();
+  }
+};
+
 struct LlvmCallToFuncCall : public OpRewritePattern<LLVM::CallOp> {
   using OpRewritePattern::OpRewritePattern;
 
@@ -851,6 +942,13 @@ struct LlvmCallToFuncCall : public OpRewritePattern<LLVM::CallOp> {
     // Gets the callee name.
     auto callee = op.getCallee();
     if (!callee) {
+      return failure();
+    }
+    // Transcendental libm calls are handled by LlvmMathCallToNeura.
+    if (callee.value() == "expf" || callee.value() == "exp" ||
+        callee.value() == "sqrtf" || callee.value() == "sqrt" ||
+        callee.value() == "sinf" || callee.value() == "sin" ||
+        callee.value() == "cosf" || callee.value() == "cos") {
       return failure();
     }
 
@@ -942,10 +1040,16 @@ struct LowerLlvmToNeuraPass
     patterns.add<LlvmMinimumToNeuraFMin>(&getContext());
     patterns.add<LlvmFDivToNeuraFDiv>(&getContext());
     patterns.add<LlvmFPToSIToNeuraCast>(&getContext());
+    patterns.add<LlvmSIToFPToNeuraCast>(&getContext());
     patterns.add<LlvmFMulAddToNeuraFMulFAdd>(&getContext());
     patterns.add<LlvmSelectToNeuraSel>(&getContext());
     patterns.add<LlvmMemsetToNeuraOps>(&getContext());
     patterns.add<LlvmFNegToNeuraFNeg>(&getContext());
+    patterns.add<LlvmMathCallToNeura>(&getContext());
+    patterns.add<LlvmIntrSqrtToNeura>(&getContext());
+    patterns.add<LlvmIntrExpToNeura>(&getContext());
+    patterns.add<LlvmIntrSinToNeura>(&getContext());
+    patterns.add<LlvmIntrCosToNeura>(&getContext());
     patterns.add<LlvmSubToNeuraSub>(&getContext());
     patterns.add<LlvmTruncToNeuraCast>(&getContext());
     patterns.add<LlvmUDivToNeuraDiv>(&getContext());

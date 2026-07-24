@@ -1,4 +1,5 @@
 #include "Conversion/ConversionPasses.h"
+#include "NeuraDialect/NeuraOps.h"
 #include "TaskflowDialect/TaskflowDialect.h"
 #include "TaskflowDialect/TaskflowOps.h"
 #include "TaskflowDialect/TaskflowTypes.h"
@@ -38,6 +39,13 @@ static void collectReadMemrefs(Operation *op, SetVector<Value> &read_memrefs) {
       read_memrefs.insert(load_op.getMemRef());
     } else if (auto load_op = dyn_cast<memref::LoadOp>(nested_op)) {
       read_memrefs.insert(load_op.getMemRef());
+    } else if (auto vload_op = dyn_cast<neura::VectorLoadOp>(nested_op)) {
+      // Neura vector load feeding the FVCU (memref is the optional base).
+      if (vload_op.getBase())
+        read_memrefs.insert(vload_op.getBase());
+    } else if (auto lidx_op = dyn_cast<neura::LoadIndexedOp>(nested_op)) {
+      if (lidx_op.getBase())
+        read_memrefs.insert(lidx_op.getBase());
     }
   });
 }
@@ -50,6 +58,9 @@ static void collectWrittenMemrefs(Operation *op,
       written_memrefs.insert(store_op.getMemRef());
     } else if (auto store_op = dyn_cast<memref::StoreOp>(nested_op)) {
       written_memrefs.insert(store_op.getMemRef());
+    } else if (auto sidx_op = dyn_cast<neura::StoreIndexedOp>(nested_op)) {
+      if (sidx_op.getBase())
+        written_memrefs.insert(sidx_op.getBase());
     }
   });
 }

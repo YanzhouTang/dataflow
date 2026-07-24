@@ -206,6 +206,49 @@ def Neura_FDivOp : Op<NeuraDialect, "fdiv"> {
   let traits = [SameOperandsAndResultElementType];
 }
 
+// Defines a floating-point exponential operation (exp).
+def Neura_FExpOp : Op<NeuraDialect, "fexp"> {
+  let summary = "Floating-point exponential operation";
+  let description = [{
+    Computes the base-e exponential exp(x). Used by the 3DGS/NeRF alpha
+    evaluation alpha = opacity * exp(power).
+  }];
+  let opName = "fexp";
+  let arguments = (ins AnyType:$operand);
+  let results = (outs AnyType:$result);
+  let traits = [SameOperandsAndResultElementType];
+}
+
+// Defines a floating-point square-root operation (sqrt).
+def Neura_FSqrtOp : Op<NeuraDialect, "fsqrt"> {
+  let summary = "Floating-point square-root operation";
+  let description = [{
+    Computes sqrt(x). Used by the 3DGS bounding-box radius r = 3*sqrt(lambda).
+  }];
+  let opName = "fsqrt";
+  let arguments = (ins AnyType:$operand);
+  let results = (outs AnyType:$result);
+  let traits = [SameOperandsAndResultElementType];
+}
+
+// Defines floating-point sine / cosine (used by NeRF positional encoding
+// gamma(p) = [sin(2^k pi p), cos(2^k pi p)]).
+def Neura_FSinOp : Op<NeuraDialect, "fsin"> {
+  let summary = "Floating-point sine operation";
+  let opName = "fsin";
+  let arguments = (ins AnyType:$operand);
+  let results = (outs AnyType:$result);
+  let traits = [SameOperandsAndResultElementType];
+}
+
+def Neura_FCosOp : Op<NeuraDialect, "fcos"> {
+  let summary = "Floating-point cosine operation";
+  let opName = "fcos";
+  let arguments = (ins AnyType:$operand);
+  let results = (outs AnyType:$result);
+  let traits = [SameOperandsAndResultElementType];
+}
+
 // Defines a floating-point maximum operation.
 def Neura_FMaxOp : Op<NeuraDialect, "fmax"> {
   let summary = "Floating-point maximum operation";
@@ -337,6 +380,24 @@ def Neura_LoadIndexedOp
                        "attr-dict `:` type($result)";
 }
 
+// Defines a contiguous vector load with integrated address calculation.
+def Neura_VectorLoadOp
+    : Op<NeuraDialect, "vector_load", [AttrSizedOperandSegments]> {
+  let summary = "Loads a contiguous vector of elements from memory";
+  let description = [{
+    Loads K contiguous elements starting at base[indices] into a vector.
+    Feeds the C-CGRA FVCU (RAICHU Section 4.2.2: "vector loads matching the
+    FVCU layout"). On hardware the vector width K maps to ceil(K / mem_width)
+    memory cycles.
+    Example:
+      %v = neura.vector_load %base [%i, %c0 : i64, i64] memref<16x32xf32> : vector<32xf32>
+  }];
+  let arguments = (ins Optional<AnyType>:$base, Variadic<AnyType>:$indices);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = "$base `[` $indices `:` type($indices) `]` type($base) "
+                       "attr-dict `:` type($result)";
+}
+
 // Defines a store operation with integrated address calculation.
 def Neura_StoreIndexedOp
     : Op<NeuraDialect, "store_indexed", [AttrSizedOperandSegments]> {
@@ -371,6 +432,26 @@ def Neura_GatherOp : Op<NeuraDialect, "gather"> {
   let assemblyFormat =
       "$table `[` $indices `]` attr-dict `:` type($table) `,` "
       "type($indices) `->` type($result)";
+}
+
+// Defines a batched random-address memory write operation.
+def Neura_ScatterOp : Op<NeuraDialect, "scatter"> {
+  let summary = "Batched random-address memory write (hardware scatter primitive)";
+  let description = [{
+    Writes multiple rows into a table in a single operation using an index
+    vector, exploiting memory-level parallelism. Semantically equivalent to
+    fancy-indexed assignment table[indices] = values. On the CGRA it maps to a
+    scatter unit that issues multiple random-address write requests together.
+    It is the write-side counterpart of neura.gather and shares the same
+    gather/scatter (GA) hardware unit on the M-CGRA.
+    Example:
+      %out = neura.scatter %table [%indices], %values : tensor<16x4xf32>, tensor<8xi64>, tensor<8x4xf32> -> tensor<16x4xf32>
+  }];
+  let arguments = (ins AnyType:$table, AnyType:$indices, AnyType:$values);
+  let results = (outs AnyType:$result);
+  let assemblyFormat =
+      "$table `[` $indices `]` `,` $values attr-dict `:` type($table) `,` "
+      "type($indices) `,` type($values) `->` type($result)";
 }
 
 // Defines a pointer computation operation.
@@ -528,6 +609,37 @@ def Neura_ShlOp : Op<NeuraDialect, "shl"> {
   let results = (outs AnyType:$result);
 }
 
+// Defines a logical shift right operation.
+def Neura_LShrOp : Op<NeuraDialect, "lshr"> {
+  let summary = "Logical shift right operation";
+  let description = [{
+    Performs a logical right shift on an integer value. Similar to llvm.lshr.
+    Used, e.g., to extract bit fields in hash-grid encoding.
+  }];
+  let arguments = (ins AnyType:$value, Optional<AnyType>:$shiftAmount);
+  let results = (outs AnyType:$result);
+}
+
+// Defines a bitwise XOR operation.
+def Neura_XorOp : Op<NeuraDialect, "xor"> {
+  let summary = "Bitwise XOR operation";
+  let arguments = (ins AnyType:$lhs, Optional<AnyType>:$rhs);
+  let results = (outs AnyType:$result);
+  let traits = [SameOperandsAndResultElementType];
+}
+
+// Defines a floating-point floor operation.
+def Neura_FloorOp : Op<NeuraDialect, "floor"> {
+  let summary = "Floating-point floor (round toward negative infinity)";
+  let description = [{
+    Rounds a floating-point value down to the nearest integer value.
+    Used, e.g., to compute integer grid coordinates in hash-grid encoding.
+  }];
+  let arguments = (ins AnyType:$operand);
+  let results = (outs AnyType:$result);
+  let traits = [SameOperandsAndResultElementType];
+}
+
 // ----------------------------------------------------
 // Defines vector operations.
 // ----------------------------------------------------
@@ -612,6 +724,88 @@ def Neura_MulAddOp : Op<NeuraDialect, "mul_add"> {
   let results = (outs AnyType:$result);
   // let assemblyFormat = "$a `,` $b `,` $c `,` $predicate attr-dict `:`
   // type($result)";
+  let traits = [SameOperandsAndResultElementType];
+}
+
+// ----------------------------------------------------
+// Defines RAICHU Fused Vector-Compare Unit (FVCU) primitives.
+//
+// The FVCU (RAICHU paper, Section 4.4) consolidates the short 3-6 element
+// vector motifs that pervade NeRF, 3DGS and ray tracing into a single
+// high-utilization datapath with four gate modes. These ops are the compiler
+// targets that the C-CGRA fusion stage (Section 4.2.2) produces so that scalar
+// multiply-add chains collapse into a few dense FVCU operations.
+// ----------------------------------------------------
+
+// FVCU 3D dot product: dot(a, b) = sum_i a[i] * b[i] -> scalar.
+// The FVCU is fed by vector loads (RAICHU Section 4.2.2 / Figure 6c), so the
+// operands are short vectors (typically vector<3xf32>) rather than scattered
+// scalars. Keeping the fan-in at two operands matches both the hardware
+// datapath and the PE input-port budget. This is the fusion target for the
+// dominant "reduce(vector-multiply)" dot-product motif in NeRF MLP rows, 3DGS
+// blending and ray-shading.
+def Neura_FVCDot3Op : Op<NeuraDialect, "fvc_dot3"> {
+  let summary = "FVCU 3D dot product: reduce(a * b) over a short vector";
+  let arguments = (ins AnyType:$a, AnyType:$b);
+  let results = (outs AnyType:$result);
+}
+
+// FVCU gate mode G1: six independent fused multiply-adds.
+//   result[i] = a[i] * b[i] + c[i]   for i in 0..5
+// Realizes the partial_dot6 motif that feeds NeRF / low-rank matrix-vector
+// layers before a G2 reduction.
+// FVCU gate mode G1: six-lane fused multiply-add (partial_dot6). Models the
+// G1 (six independent FMA lanes) + G2 (pairwise reduce) pipeline for a 6-element
+// multiply-accumulate chain Σ a_i·b_i. The operands are the interleaved factor
+// pairs [a0,b0,a1,b1,...,a5,b5]; the single result is the reduced partial dot.
+// Fusing the scalar MAC chain into this op is exactly the "six-element fused
+// multiply-accumulate chains ... collapsed into compact FVCU primitives"
+// (RAICHU §4.2.2) used by the NeRF / low-rank NeRF matrix-vector layers.
+def Neura_FVCPartialDot6Op : Op<NeuraDialect, "fvc_partial_dot6"> {
+  let summary = "FVCU G1: six-lane fused multiply-accumulate (partial_dot6)";
+  let arguments = (ins Variadic<AnyType>:$operands);
+  let results = (outs AnyType:$result);
+}
+
+// FVCU gate mode G2: pairwise reduce of the six lanes to a scalar.
+// Follows fvc_partial_dot6 to complete a dot-product / reduction. Accepts a
+// single vector input OR the (up to six) scalar lane values, so a scalar
+// a+b+c+d+e+f reduction can be fused directly into one FVCU reduce op (the
+// reduce stage used in NeRF / low-rank NeRF).
+def Neura_FVCReduce6Op : Op<NeuraDialect, "fvc_reduce6"> {
+  let summary = "FVCU G2: pairwise reduction of up to six lanes to a scalar";
+  let arguments = (ins Variadic<AnyType>:$inputs);
+  let results = (outs AnyType:$result);
+}
+
+// FVCU gate mode G4: pairwise compare-and-swap. Given (a,b) it produces the
+// ordered pair (lo = min(a,b), hi = max(a,b)) in one FVCU compare op. Used to
+// tighten interval bounds in ray queries (the per-axis slab min/max of the AABB
+// test) and to order dual 3D dot products in 3DGS.
+def Neura_FVCCmpSwapOp : Op<NeuraDialect, "fvc_cmpswap"> {
+  let summary = "FVCU G4: pairwise compare-and-swap -> (min, max)";
+  let arguments = (ins AnyType:$a, AnyType:$b);
+  let results = (outs AnyType:$lo, AnyType:$hi);
+  let traits = [SameOperandsAndResultElementType];
+}
+
+// FVCU gate mode G3: 3-way compare reduction, the core of the ray-box (AABB)
+// slab intersection test. The FVCU is a *Fused Vector-Compare* Unit, so its
+// compare tree collapses the nested min/max of the slab test into one op:
+//   fvc_max3(a,b,c) = max(a,max(b,c))  -> tnear (entry) reduction
+//   fvc_min3(a,b,c) = min(a,min(b,c))  -> tfar  (exit)  reduction
+// This is the intersection-test acceleration mode (RAICHU §4.2.2, Fig 6/7 G3).
+def Neura_FVCMax3Op : Op<NeuraDialect, "fvc_max3"> {
+  let summary = "FVCU G3: 3-way max compare-reduction (AABB slab tnear)";
+  let arguments = (ins AnyType:$a, AnyType:$b, AnyType:$c);
+  let results = (outs AnyType:$result);
+  let traits = [SameOperandsAndResultElementType];
+}
+
+def Neura_FVCMin3Op : Op<NeuraDialect, "fvc_min3"> {
+  let summary = "FVCU G3: 3-way min compare-reduction (AABB slab tfar)";
+  let arguments = (ins AnyType:$a, AnyType:$b, AnyType:$c);
+  let results = (outs AnyType:$result);
   let traits = [SameOperandsAndResultElementType];
 }
 

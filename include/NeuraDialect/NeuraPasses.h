@@ -21,6 +21,10 @@ void registerNeuraConversionPassPipeline();
 std::unique_ptr<mlir::Pass> createInsertDataMovPass();
 std::unique_ptr<mlir::Pass> createInsertCtrlMovPass();
 std::unique_ptr<mlir::Pass> createAssignAcceleratorPass();
+std::unique_ptr<mlir::Pass> createRaichuClassifyTargetPass();
+std::unique_ptr<mlir::Pass> createRaichuFuseFvcuPass();
+std::unique_ptr<mlir::Pass> createRaichuModelGaLatencyPass();
+std::unique_ptr<mlir::Pass> createRaichuModelFvcuLatencyPass();
 std::unique_ptr<mlir::Pass> createTransformCtrlToDataFlowPass();
 std::unique_ptr<mlir::Pass> createLeveragePredicatedValuePass();
 // Creates the MapToAccelerator pass. Tile dimensions default to 0 (use

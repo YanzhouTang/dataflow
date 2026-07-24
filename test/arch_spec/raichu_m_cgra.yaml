@@ -1,0 +1,100 @@
+architecture:
+  name: "RaichuMemoryCgra"
+  version: "1.0"
+
+# RAICHU M-CGRA (Memory CGRA), Section 4.1 / Figure 5b.
+#   - Four memory tiles, each a 1x4 vertical PE array => 16 PEs total.
+#   - The topmost PE of each tile integrates a Gather/Scatter (GA) unit that
+#     collects shared primitives through the 32x32 crossbar to the shared SRAM;
+#     the lower PEs use general-purpose ALUs for address computation.
+# We model the 16 PEs as a 4x4 fabric (each column ~ one memory tile), with the
+# GA unit exposed on the top row (one GA PE per column). Hash-grid encoding
+# performs float coordinate math (scale, floor, clamp) alongside integer
+# hashing, so the address ALUs include both integer and floating-point units.
+multi_cgra_defaults:
+  base_topology: "mesh"
+  rows: 1
+  columns: 1
+  memory:
+    capacity: 4096
+
+per_cgra_defaults:
+  rows: 4
+  columns: 4
+  ctrl_mem_items: 32
+  base_topology: "mesh"
+  memory:
+    banks: 32
+
+tile_defaults:
+  num_registers: 64
+  # Lower PEs: general-purpose integer + floating-point address ALUs.
+  fu_types: ["add", "mul", "div", "fadd", "fmul", "fdiv", "shift", "logic",
+             "cmp", "sel", "type_conv", "constant", "mem", "mem_indexed", "phi",
+             "grant", "loop_control", "return", "alloca"]
+
+link_defaults:
+  latency: 1
+  bandwidth: 32
+
+link_overrides:
+
+# The topmost PE of each of the four memory tiles owns a Gather/Scatter unit
+# (top row: y = 0, x = 0..3).
+tile_overrides:
+  - cgra_x: 0
+    cgra_y: 0
+    tile_x: 0
+    tile_y: 0
+    fu_types: ["gather_scatter", "mem", "mem_indexed", "add", "mul", "div",
+               "fadd", "fmul", "fdiv", "shift", "logic", "cmp", "sel",
+               "type_conv", "constant", "phi", "grant", "loop_control",
+               "return", "alloca"]
+    num_registers: 64
+    existence: true
+  - cgra_x: 0
+    cgra_y: 0
+    tile_x: 1
+    tile_y: 0
+    fu_types: ["gather_scatter", "mem", "mem_indexed", "add", "mul", "div",
+               "fadd", "fmul", "fdiv", "shift", "logic", "cmp", "sel",
+               "type_conv", "constant", "phi", "grant", "loop_control",
+               "return", "alloca"]
+    num_registers: 64
+    existence: true
+  - cgra_x: 0
+    cgra_y: 0
+    tile_x: 2
+    tile_y: 0
+    fu_types: ["gather_scatter", "mem", "mem_indexed", "add", "mul", "div",
+               "fadd", "fmul", "fdiv", "shift", "logic", "cmp", "sel",
+               "type_conv", "constant", "phi", "grant", "loop_control",
+               "return", "alloca"]
+    num_registers: 64
+    existence: true
+  - cgra_x: 0
+    cgra_y: 0
+    tile_x: 3
+    tile_y: 0
+    fu_types: ["gather_scatter", "mem", "mem_indexed", "add", "mul", "div",
+               "fadd", "fmul", "fdiv", "shift", "logic", "cmp", "sel",
+               "type_conv", "constant", "phi", "grant", "loop_control",
+               "return", "alloca"]
+    num_registers: 64
+    existence: true
+
+extensions:
+  crossbar: true
+
+simulator:
+  execution_model: "serial"
+  logging:
+    enabled: false
+    file: "output.log"
+  driver:
+    name: "Driver"
+    frequency: "1GHz"
+  device:
+    name: "Device"
+    frequency: "1GHz"
+    bind_to_architecture: true

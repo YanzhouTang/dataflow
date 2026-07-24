@@ -91,6 +91,12 @@ struct MapToAcceleratorPass
       llvm::cl::desc("Comma separated list of valid tile coords x_y,x_y to "
                      "support non-rectangular shapes."),
       llvm::cl::init("")};
+  Option<int> maxSteps{
+      *this, "max-steps",
+      llvm::cl::desc("Time-step search window per II (schedule slots = II * "
+                     "max-steps). Smaller = faster search but may fail if the "
+                     "kernel schedule is longer. Default 10."),
+      llvm::cl::init(10)};
 
   // Configures mapping strategy and mode based on command-line options.
   bool configureMappingStrategy(StringRef mapping_strategy_opt,
@@ -306,7 +312,8 @@ struct MapToAcceleratorPass
       llvm::errs() << "[MapToAcceleratorPass] Start mapping with target II of "
                    << ii << "\n";
       // Creates a mapping state for the current II.
-      MappingState mapping_state(architecture, ii, is_spatial_only);
+      MappingState mapping_state(architecture, ii, is_spatial_only,
+                                 maxSteps.getValue());
       if (mapping_strategy->map(sorted_ops_with_alap_levels, critical_ops,
                                 architecture, mapping_state)) {
         // Success.

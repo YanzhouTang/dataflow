@@ -6,6 +6,10 @@ add_mlir_library(
     InsertCtrlMovPass.cpp
     FusePatternPass.cpp
     AssignAcceleratorPass.cpp
+    RaichuClassifyTargetPass.cpp
+    RaichuFuseFvcuPass.cpp
+    RaichuModelGaLatencyPass.cpp
+    RaichuModelFvcuLatencyPass.cpp
     TransformCtrlToDataFlowPass.cpp
     LeveragePredicatedValuePass.cpp
     MapToAcceleratorPass.cpp

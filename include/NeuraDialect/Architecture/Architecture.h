@@ -91,7 +91,32 @@ enum OperationKind {
   ICtrlMov = 40,
   // Counter operations.
   ICounter = 41,
-  IExtractPredicate = 42
+  IExtractPredicate = 42,
+  // Gather/scatter memory primitives (M-CGRA GA unit).
+  IGather = 43,
+  IScatter = 44,
+  // FVCU primitives (C-CGRA Fused Vector-Compare Unit).
+  IFvcDot3 = 45,
+  IFvcPartialDot6 = 46,
+  IFvcReduce6 = 47,
+  // Additional scalar primitives needed by real rendering kernels.
+  IFloor = 48,
+  ILShr = 49,
+  IFMin = 50,
+  IFMax = 51,
+  // Contiguous vector load feeding the FVCU.
+  IVectorLoad = 52,
+  // Transcendental scalar primitives for real rendering math.
+  IFExp = 53,
+  IFSqrt = 54,
+  // FVCU G3: 3-way compare reductions (ray-box AABB slab intersection test).
+  IFvcMax3 = 55,
+  IFvcMin3 = 56,
+  // FVCU G4: pairwise compare-and-swap (sorting / interval tightening).
+  IFvcCmpSwap = 57,
+  // Trigonometric scalar primitives (NeRF positional encoding).
+  IFSin = 58,
+  IFCos = 59
 };
 
 // Maps hardware resource names to their supported operations.
@@ -104,14 +129,24 @@ static const std::map<std::string, std::vector<OperationKind>>
         {"div", {IDiv, IRem}},
 
         // Floating-point operations.
-        {"fadd", {FAdd, FSub}},
+        {"fadd", {FAdd, FSub, IFloor, IFMin, IFMax}},
         {"fmul", {FMul}},
-        {"fdiv", {FDiv}},
+        {"fdiv", {FDiv, IFExp, IFSqrt, IFSin, IFCos}},
 
         // Memory operations.
-        {"mem", {ILoad, IStore}},
-        {"mem_indexed", {ILoadIndexed, IStoreIndexed}},
+        {"mem", {ILoad, IStore, IVectorLoad}},
+        {"mem_indexed", {ILoadIndexed, IStoreIndexed, IVectorLoad}},
         {"alloca", {IAlloca}},
+
+        // Gather/scatter memory primitives (M-CGRA GA unit).
+        {"gather", {IGather}},
+        {"scatter", {IScatter}},
+        {"gather_scatter", {IGather, IScatter}},
+
+        // FVCU primitives (C-CGRA Fused Vector-Compare Unit).
+        {"fvcu",
+         {IFvcDot3, IFvcPartialDot6, IFvcReduce6, IFvcMax3, IFvcMin3,
+          IFvcCmpSwap}},
 
         // Logical operations.
         {"logic", {IOr, INot, IAnd, IXor}},
@@ -129,7 +164,7 @@ static const std::map<std::string, std::vector<OperationKind>>
         {"fmul_fadd", {FMulFAdd}},
 
         // Shift operations.
-        {"shift", {IShl}},
+        {"shift", {IShl, ILShr}},
 
         // Control flow operations.
         {"return", {IReturn}},

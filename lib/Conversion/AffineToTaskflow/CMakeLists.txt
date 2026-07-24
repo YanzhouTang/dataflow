@@ -10,6 +10,7 @@ add_mlir_conversion_library(MLIRAffineToTaskflowPass
 
   LINK_LIBS PUBLIC
   MLIRTaskflow
+  MLIRNeura
   MLIRArithDialect
   MLIRFuncDialect
   MLIRLinalgDialect

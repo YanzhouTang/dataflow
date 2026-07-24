@@ -29,8 +29,9 @@ constexpr int kSingleDigitLen = 1;
 constexpr int kDoubleDigitLen = 2;
 
 MappingState::MappingState(const Architecture &arch, int II,
-                           bool is_spatial_only)
-    : II(II), is_spatial_only(is_spatial_only) {}
+                           bool is_spatial_only, int max_steps)
+    : II(II), is_spatial_only(is_spatial_only),
+      kMaxSteps(max_steps > 0 ? max_steps : 10) {}
 
 // ---------------------------------------------------------------------------
 // Static / private helpers
